@@ -15,15 +15,15 @@ import top.niunaijun.blackboxa.biz.cache.AppSharedPreferenceDelegate
 
 class BlackBoxLoader {
 
-    private var mHideRoot by AppSharedPreferenceDelegate(App.getContext(), false)
+    private var mHideRoot by AppSharedPreferenceDelegate(App.getContext(), true)
 
-    private var mDaemonEnable by AppSharedPreferenceDelegate(App.getContext(), false)
+    private var mDaemonEnable by AppSharedPreferenceDelegate(App.getContext(), true)
     private var mShowShortcutPermissionDialog by AppSharedPreferenceDelegate(App.getContext(), true)
 
     
-    private var mUseVpnNetwork by AppSharedPreferenceDelegate(App.getContext(), false)
+    private var mUseVpnNetwork by AppSharedPreferenceDelegate(App.getContext(), true)
 
-    private var mDisableFlagSecure by AppSharedPreferenceDelegate(App.getContext(), false)
+    private var mDisableFlagSecure by AppSharedPreferenceDelegate(App.getContext(), true)
 
     fun hideRoot(): Boolean {
         return try {
