@@ -1,6 +1,7 @@
 package top.niunaijun.blackbox.core.system.pm;
 
 import android.content.BroadcastReceiver;
+import android.content.ComponentCallbacks2;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -27,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.WeakHashMap;
 
 import top.niunaijun.blackbox.BlackBoxCore;
 import top.niunaijun.blackbox.core.GmsCore;
@@ -57,6 +59,7 @@ public class BPackageManagerService extends IBPackageManagerService.Stub impleme
     private final ComponentResolver mComponentResolver;
     private static final BUserManagerService sUserManager = BUserManagerService.get();
     private final List<PackageMonitor> mPackageMonitors = new ArrayList<>();
+    private final WeakHashMap<String, ApplicationInfo> mApplicationInfoCache = new WeakHashMap<>();
 
     final Map<String, BPackageSettings> mPackages = mSettings.mPackages;
     final Object mInstallLock = new Object();
@@ -82,6 +85,9 @@ public class BPackageManagerService extends IBPackageManagerService.Stub impleme
             if (!TextUtils.isEmpty(action)) {
                 if ("android.intent.action.PACKAGE_ADDED".equals(action) || "android.intent.action.PACKAGE_REMOVED".equals(action)) {
                     mSettings.scanPackage();
+                    synchronized (mApplicationInfoCache) {
+                        mApplicationInfoCache.clear();
+                    }
                 }
             }
         }
@@ -99,16 +105,38 @@ public class BPackageManagerService extends IBPackageManagerService.Stub impleme
             return null;
         }
         flags = updateFlags(flags, userId);
+        String cacheKey = packageName + "_" + userId + "_" + flags;
+        synchronized (mApplicationInfoCache) {
+            ApplicationInfo cached = mApplicationInfoCache.get(cacheKey);
+            if (cached != null) {
+                return cached;
+            }
+        }
         
         synchronized (mPackages) {
             
             BPackageSettings ps = mPackages.get(packageName);
             if (ps != null) {
                 BPackage p = ps.pkg;
-                return PackageManagerCompat.generateApplicationInfo(p, flags, ps.readUserState(userId), userId);
+                ApplicationInfo info = PackageManagerCompat.generateApplicationInfo(p, flags, ps.readUserState(userId), userId);
+                if (info != null) {
+                    synchronized (mApplicationInfoCache) {
+                        mApplicationInfoCache.put(cacheKey, info);
+                    }
+                }
+                return info;
             }
         }
         return null;
+    }
+
+    public void trimMemory(int level) {
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE) {
+            synchronized (mApplicationInfoCache) {
+                mApplicationInfoCache.clear();
+            }
+            System.gc();
+        }
     }
 
     @Override

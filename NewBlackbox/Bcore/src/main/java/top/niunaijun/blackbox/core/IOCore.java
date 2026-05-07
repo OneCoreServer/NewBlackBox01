@@ -181,7 +181,6 @@ public class IOCore {
         int pid = Process.myPid();
         String selfProc = "/proc/self/";
         String proc = "/proc/" + pid + "/";
-
         String cmdline = new File(BEnvironment.getProcDir(appPid), "cmdline").getAbsolutePath();
         rule.put(proc + "cmdline", cmdline);
         rule.put(selfProc + "cmdline", cmdline);

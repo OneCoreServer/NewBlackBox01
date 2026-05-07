@@ -371,4 +371,11 @@ public class BActivityManagerService extends IBActivityManagerService.Stub imple
     public void systemReady() {
         mBroadcastManager.startup();
     }
+
+    public void cleanUpActivities(String packageName, int userId) {
+        UserSpace userSpace = getOrCreateSpaceLocked(userId);
+        synchronized (userSpace.mStack) {
+            userSpace.mStack.finishAllActivities(packageName, userId);
+        }
+    }
 }
