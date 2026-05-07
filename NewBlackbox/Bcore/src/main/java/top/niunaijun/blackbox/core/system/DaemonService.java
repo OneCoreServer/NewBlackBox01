@@ -146,17 +146,8 @@ public class DaemonService extends Service {
             Log.i(TAG, "DaemonInnerService -> onStartCommand");
             
             try {
-                
-                NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-                if (nm != null) {
-                    nm.cancel(NOTIFY_ID);
-                    Log.d(TAG, "Notification cancelled successfully");
-                }
-                
-                
                 stopSelf();
-                return START_NOT_STICKY;
-                
+                return START_STICKY;
             } catch (Exception e) {
                 Log.e(TAG, "Error in DaemonInnerService: " + e.getMessage(), e);
                 stopSelf();
