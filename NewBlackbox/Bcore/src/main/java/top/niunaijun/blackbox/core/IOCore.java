@@ -164,7 +164,6 @@ public class IOCore {
     }
 
     private void hideRoot(Map<String, String> rule) {
-        // Classic su paths
         rule.put("/system/app/Superuser.apk", "/system/app/Superuser.apk-fake");
         rule.put("/sbin/su", "/sbin/su-fake");
         rule.put("/system/bin/su", "/system/bin/su-fake");
@@ -175,19 +174,6 @@ public class IOCore {
         rule.put("/system/bin/failsafe/su", "/system/bin/failsafe/su-fake");
         rule.put("/data/local/su", "/data/local/su-fake");
         rule.put("/su/bin/su", "/su/bin/su-fake");
-
-        // Additional modern root traces (Magisk / KernelSU style)
-        rule.put("/system/bin/.ext/su", "/system/bin/.ext/su-fake");
-        rule.put("/system/usr/we-need-root/su", "/system/usr/we-need-root/su-fake");
-        rule.put("/cache/su", "/cache/su-fake");
-        rule.put("/data/su", "/data/su-fake");
-        rule.put("/dev/com.koushikdutta.superuser.daemon/", "/dev/com.koushikdutta.superuser.daemon-fake/");
-
-        // Hide known manager/apks and mount points often probed by anti-cheat logic
-        rule.put("/system/app/Magisk.apk", "/system/app/Magisk.apk-fake");
-        rule.put("/data/adb/magisk", "/data/adb/magisk-fake");
-        rule.put("/data/adb/ksu", "/data/adb/ksu-fake");
-        rule.put("/debug_ramdisk", "/debug_ramdisk-fake");
     }
 
     private void proc(Map<String, String> rule) {
