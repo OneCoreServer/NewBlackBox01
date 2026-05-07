@@ -82,6 +82,7 @@ public class BProcessManagerService implements ISystemService {
             app.buid = buid;
             app.callingBUid = getBUidByPidOrPackageName(callingPid, packageName);
             app.userId = userId;
+            app.shouldRestart = processName.equals(packageName);
 
             bProcess.put(processName, app);
             mPidsSelfLocked.add(app);
