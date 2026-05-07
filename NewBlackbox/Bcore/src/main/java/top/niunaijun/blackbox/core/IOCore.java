@@ -9,6 +9,7 @@ import android.os.Process;
 import android.text.TextUtils;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -195,9 +196,33 @@ public class IOCore {
         int pid = Process.myPid();
         String selfProc = "/proc/self/";
         String proc = "/proc/" + pid + "/";
+        File appProcDir = BEnvironment.getProcDir(appPid);
 
-        String cmdline = new File(BEnvironment.getProcDir(appPid), "cmdline").getAbsolutePath();
+        String cmdline = new File(appProcDir, "cmdline").getAbsolutePath();
         rule.put(proc + "cmdline", cmdline);
         rule.put(selfProc + "cmdline", cmdline);
+
+        // Redirect additional /proc probes frequently used by anti-cheat checks.
+        String mounts = ensureProcMirrorFile(appProcDir, "mounts", "rootfs / rootfs rw 0 0\n");
+        String maps = ensureProcMirrorFile(appProcDir, "maps", "");
+        String status = ensureProcMirrorFile(appProcDir, "status", "Name:\tapp_process\nTracerPid:\t0\n");
+
+        rule.put(proc + "mounts", mounts);
+        rule.put(selfProc + "mounts", mounts);
+        rule.put(proc + "maps", maps);
+        rule.put(selfProc + "maps", maps);
+        rule.put(proc + "status", status);
+        rule.put(selfProc + "status", status);
+    }
+
+    private String ensureProcMirrorFile(File appProcDir, String fileName, String defaultContent) {
+        File file = new File(appProcDir, fileName);
+        if (!file.exists()) {
+            try {
+                FileUtils.writeToFile(defaultContent.getBytes(), file);
+            } catch (IOException ignored) {
+            }
+        }
+        return file.getAbsolutePath();
     }
 }
