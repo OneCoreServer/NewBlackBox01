@@ -77,7 +77,7 @@ public class BProcessManagerService implements ISystemService {
             app = new ProcessRecord(info, processName);
             app.uid = Process.myUid();
             app.bpid = bpid;
-            app.buid = BPackageManagerService.get().getAppId(packageName);
+            app.buid = buid;
             app.callingBUid = getBUidByPidOrPackageName(callingPid, packageName);
             app.userId = userId;
 
@@ -172,7 +172,7 @@ public class BProcessManagerService implements ISystemService {
             appThread.linkToDeath(new IBinder.DeathRecipient() {
                 @Override
                 public void binderDied() {
-                    Log.d(TAG, "App Died: " + app.processName);
+                    Log.w(TAG, "App Died: pkg=" + app.getPackageName() + ", process=" + app.processName + ", pid=" + app.pid + ", userId=" + app.userId);
                     appThread.unlinkToDeath(this, 0);
                     onProcessDie(app);
                 }

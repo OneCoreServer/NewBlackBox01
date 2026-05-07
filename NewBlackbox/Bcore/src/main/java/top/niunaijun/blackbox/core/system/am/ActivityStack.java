@@ -539,15 +539,24 @@ public class ActivityStack {
     @SuppressWarnings("deprecation")
     private void synchronizeTasks() {
         List<ActivityManager.RecentTaskInfo> recentTasks = mAms.getRecentTasks(100, 0);
-        Map<Integer, TaskRecord> newTacks = new LinkedHashMap<>();
+        if (recentTasks == null || recentTasks.isEmpty()) {
+            return;
+        }
+        Map<Integer, TaskRecord> reorderedTasks = new LinkedHashMap<>();
         for (int i = recentTasks.size() - 1; i >= 0; i--) {
             ActivityManager.RecentTaskInfo next = recentTasks.get(i);
             TaskRecord taskRecord = mTasks.get(next.id);
-            if (taskRecord == null)
+            if (taskRecord == null) {
                 continue;
-            newTacks.put(next.id, taskRecord);
+            }
+            reorderedTasks.put(next.id, taskRecord);
+        }
+        for (Map.Entry<Integer, TaskRecord> entry : mTasks.entrySet()) {
+            if (!reorderedTasks.containsKey(entry.getKey())) {
+                reorderedTasks.put(entry.getKey(), entry.getValue());
+            }
         }
         mTasks.clear();
-        mTasks.putAll(newTacks);
+        mTasks.putAll(reorderedTasks);
     }
 }
