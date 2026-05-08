@@ -124,14 +124,20 @@ public class BProcessManagerService implements ISystemService {
 
     public void restartAppProcess(String packageName, String processName, int userId) {
         synchronized (mProcessLock) {
-            int callingUid = Binder.getCallingUid();
             int callingPid = Binder.getCallingPid();
-            ProcessRecord app = findProcessByPid(callingPid);;
-            if (app == null) {
-                String stubProcessName = getProcessName(BlackBoxCore.getContext(), callingPid);
-                int bpid = parseBPid(stubProcessName);
-                startProcessLocked(packageName, processName, userId, bpid, callingPid);
+            ProcessRecord targetRecord = findProcessRecord(packageName, processName, userId);
+            if (targetRecord != null && targetRecord.bActivityThread != null) {
+                return;
             }
+
+            int bpid = -1;
+            try {
+                String stubProcessName = getProcessName(BlackBoxCore.getContext(), callingPid);
+                bpid = parseBPid(stubProcessName);
+            } catch (RuntimeException e) {
+                Log.w(TAG, "restartAppProcess: failed to resolve stub process for pid=" + callingPid + ", using auto bpid");
+            }
+            startProcessLocked(packageName, processName, userId, bpid, callingPid);
         }
     }
 
