@@ -18,6 +18,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Collections;
 
 import top.niunaijun.blackbox.BlackBoxCore;
 import top.niunaijun.blackbox.core.IBActivityThread;
@@ -101,7 +102,12 @@ public class BProcessManagerService implements ISystemService {
 
     private int getUsingBPidL() {
         ActivityManager manager = (ActivityManager) BlackBoxCore.getContext().getSystemService(Context.ACTIVITY_SERVICE);
-        List<ActivityManager.RunningAppProcessInfo> runningAppProcesses = manager.getRunningAppProcesses();
+        List<ActivityManager.RunningAppProcessInfo> runningAppProcesses = manager != null
+                ? manager.getRunningAppProcesses()
+                : Collections.emptyList();
+        if (runningAppProcesses == null) {
+            runningAppProcesses = Collections.emptyList();
+        }
         Set<Integer> usingPs = new HashSet<>();
         for (ActivityManager.RunningAppProcessInfo runningAppProcess : runningAppProcesses) {
             int i = parseBPid(runningAppProcess.processName);
@@ -152,6 +158,10 @@ public class BProcessManagerService implements ISystemService {
         Bundle bundle = new Bundle();
         bundle.putParcelable(AppConfig.KEY, appConfig);
         Bundle init = ProviderCall.callSafely(record.getProviderAuthority(), "_Black_|_init_process_", null, bundle);
+        if (init == null) {
+            Log.w(TAG, "initProcess failed: provider returned null for " + record.processName);
+            return false;
+        }
         IBinder appThread = BundleCompat.getBinder(init, "_Black_|_client_");
         if (appThread == null || !appThread.isBinderAlive()) {
             return false;
@@ -289,7 +299,13 @@ public class BProcessManagerService implements ISystemService {
     private static String getProcessName(Context context, int pid) {
         String processName = null;
         ActivityManager am = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
-        for (ActivityManager.RunningAppProcessInfo info : am.getRunningAppProcesses()) {
+        List<ActivityManager.RunningAppProcessInfo> runningAppProcesses = am != null
+                ? am.getRunningAppProcesses()
+                : Collections.emptyList();
+        if (runningAppProcesses == null) {
+            runningAppProcesses = Collections.emptyList();
+        }
+        for (ActivityManager.RunningAppProcessInfo info : runningAppProcesses) {
             if (info.pid == pid) {
                 processName = info.processName;
                 break;
@@ -304,7 +320,12 @@ public class BProcessManagerService implements ISystemService {
     public static int getPid(Context context, String processName) {
         try {
             ActivityManager manager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
-            List<ActivityManager.RunningAppProcessInfo> runningAppProcesses = manager.getRunningAppProcesses();
+            List<ActivityManager.RunningAppProcessInfo> runningAppProcesses = manager != null
+                    ? manager.getRunningAppProcesses()
+                    : Collections.emptyList();
+            if (runningAppProcesses == null) {
+                runningAppProcesses = Collections.emptyList();
+            }
             for (ActivityManager.RunningAppProcessInfo runningAppProcess : runningAppProcesses) {
                 if (runningAppProcess.processName.equals(processName)) {
                     return runningAppProcess.pid;
