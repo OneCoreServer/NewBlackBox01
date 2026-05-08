@@ -5,7 +5,9 @@ import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.os.Binder;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.os.Process;
 import android.os.RemoteException;
 import android.util.Log;
@@ -18,6 +20,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Collections;
+import java.util.concurrent.ConcurrentHashMap;
 
 import top.niunaijun.blackbox.BlackBoxCore;
 import top.niunaijun.blackbox.core.IBActivityThread;
@@ -41,6 +45,13 @@ public class BProcessManagerService implements ISystemService {
     private final Map<Integer, Map<String, ProcessRecord>> mProcessMap = new HashMap<>();
     private final List<ProcessRecord> mPidsSelfLocked = new ArrayList<>();
     private final Object mProcessLock = new Object();
+    private final Map<String, RestartWindow> mRestartWindows = new ConcurrentHashMap<>();
+    private final Handler mHandler = new Handler(Looper.getMainLooper());
+
+    private static final int MAX_RESTARTS_IN_WINDOW = 3;
+    private static final long RESTART_WINDOW_MS = 60_000L;
+    private static final long RESTART_DELAY_MS = 1_500L;
+
 
     public static BProcessManagerService get() {
         return sBProcessManagerService;
@@ -101,7 +112,12 @@ public class BProcessManagerService implements ISystemService {
 
     private int getUsingBPidL() {
         ActivityManager manager = (ActivityManager) BlackBoxCore.getContext().getSystemService(Context.ACTIVITY_SERVICE);
-        List<ActivityManager.RunningAppProcessInfo> runningAppProcesses = manager.getRunningAppProcesses();
+        List<ActivityManager.RunningAppProcessInfo> runningAppProcesses = manager != null
+                ? manager.getRunningAppProcesses()
+                : Collections.emptyList();
+        if (runningAppProcesses == null) {
+            runningAppProcesses = Collections.emptyList();
+        }
         Set<Integer> usingPs = new HashSet<>();
         for (ActivityManager.RunningAppProcessInfo runningAppProcess : runningAppProcesses) {
             int i = parseBPid(runningAppProcess.processName);
@@ -118,14 +134,20 @@ public class BProcessManagerService implements ISystemService {
 
     public void restartAppProcess(String packageName, String processName, int userId) {
         synchronized (mProcessLock) {
-            int callingUid = Binder.getCallingUid();
             int callingPid = Binder.getCallingPid();
-            ProcessRecord app = findProcessByPid(callingPid);;
-            if (app == null) {
-                String stubProcessName = getProcessName(BlackBoxCore.getContext(), callingPid);
-                int bpid = parseBPid(stubProcessName);
-                startProcessLocked(packageName, processName, userId, bpid, callingPid);
+            ProcessRecord targetRecord = findProcessRecord(packageName, processName, userId);
+            if (targetRecord != null && targetRecord.bActivityThread != null) {
+                return;
             }
+
+            int bpid = -1;
+            try {
+                String stubProcessName = getProcessName(BlackBoxCore.getContext(), callingPid);
+                bpid = parseBPid(stubProcessName);
+            } catch (RuntimeException e) {
+                Log.w(TAG, "restartAppProcess: failed to resolve stub process for pid=" + callingPid + ", using auto bpid");
+            }
+            startProcessLocked(packageName, processName, userId, bpid, callingPid);
         }
     }
 
@@ -152,6 +174,10 @@ public class BProcessManagerService implements ISystemService {
         Bundle bundle = new Bundle();
         bundle.putParcelable(AppConfig.KEY, appConfig);
         Bundle init = ProviderCall.callSafely(record.getProviderAuthority(), "_Black_|_init_process_", null, bundle);
+        if (init == null) {
+            Log.w(TAG, "initProcess failed: provider returned null for " + record.processName);
+            return false;
+        }
         IBinder appThread = BundleCompat.getBinder(init, "_Black_|_client_");
         if (appThread == null || !appThread.isBinderAlive()) {
             return false;
@@ -202,8 +228,41 @@ public class BProcessManagerService implements ISystemService {
             mPidsSelfLocked.remove(record);
 
             removeProc(record);
+            maybeScheduleRestart(record);
             BNotificationManagerService.get().deletePackageNotification(record.getPackageName(), record.userId);
         }
+    }
+
+    private void maybeScheduleRestart(final ProcessRecord record) {
+        String key = buildRestartKey(record.getPackageName(), record.processName, record.userId);
+        RestartWindow window = mRestartWindows.computeIfAbsent(key, k -> new RestartWindow());
+        long now = System.currentTimeMillis();
+        if (now - window.windowStartMs > RESTART_WINDOW_MS) {
+            window.windowStartMs = now;
+            window.attemptCount = 0;
+        }
+        if (window.attemptCount >= MAX_RESTARTS_IN_WINDOW) {
+            Log.w(TAG, "restart suppressed for " + key + " (too many crashes in window)");
+            return;
+        }
+        window.attemptCount++;
+        mHandler.postDelayed(() -> {
+            synchronized (mProcessLock) {
+                ProcessRecord running = findProcessRecord(record.getPackageName(), record.processName, record.userId);
+                if (running == null || running.bActivityThread == null) {
+                    startProcessLocked(record.getPackageName(), record.processName, record.userId, -1, -1);
+                }
+            }
+        }, RESTART_DELAY_MS);
+    }
+
+    private String buildRestartKey(String packageName, String processName, int userId) {
+        return packageName + "|" + processName + "|" + userId;
+    }
+
+    private static final class RestartWindow {
+        long windowStartMs = System.currentTimeMillis();
+        int attemptCount = 0;
     }
 
     public ProcessRecord findProcessRecord(String packageName, String processName, int userId) {
@@ -289,7 +348,13 @@ public class BProcessManagerService implements ISystemService {
     private static String getProcessName(Context context, int pid) {
         String processName = null;
         ActivityManager am = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
-        for (ActivityManager.RunningAppProcessInfo info : am.getRunningAppProcesses()) {
+        List<ActivityManager.RunningAppProcessInfo> runningAppProcesses = am != null
+                ? am.getRunningAppProcesses()
+                : Collections.emptyList();
+        if (runningAppProcesses == null) {
+            runningAppProcesses = Collections.emptyList();
+        }
+        for (ActivityManager.RunningAppProcessInfo info : runningAppProcesses) {
             if (info.pid == pid) {
                 processName = info.processName;
                 break;
@@ -304,7 +369,12 @@ public class BProcessManagerService implements ISystemService {
     public static int getPid(Context context, String processName) {
         try {
             ActivityManager manager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
-            List<ActivityManager.RunningAppProcessInfo> runningAppProcesses = manager.getRunningAppProcesses();
+            List<ActivityManager.RunningAppProcessInfo> runningAppProcesses = manager != null
+                    ? manager.getRunningAppProcesses()
+                    : Collections.emptyList();
+            if (runningAppProcesses == null) {
+                runningAppProcesses = Collections.emptyList();
+            }
             for (ActivityManager.RunningAppProcessInfo runningAppProcess : runningAppProcesses) {
                 if (runningAppProcess.processName.equals(processName)) {
                     return runningAppProcess.pid;
