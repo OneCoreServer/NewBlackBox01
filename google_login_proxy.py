@@ -16,6 +16,9 @@ import urllib.request
 import json
 import ssl
 import time
+import base64
+import secrets
+import hashlib
 
 # ========== CONFIGURATION ==========
 HOST = "0.0.0.0"
@@ -27,6 +30,14 @@ REDIRECT_URI = f"http://localhost:{PORT}/auth/google/callback"
 # Token storage (in production use Redis/DB)
 auth_tokens = {}
 active_sessions = {}
+
+
+def generate_pkce():
+    """Generate PKCE code verifier and challenge"""
+    verifier = secrets.token_urlsafe(64)
+    challenge = hashlib.sha256(verifier.encode()).digest()
+    challenge_b64 = base64.urlsafe_b64encode(challenge).rstrip(b'=').decode()
+    return verifier, challenge_b64
 
 
 class GoogleAuthProxy(BaseHTTPRequestHandler):
@@ -72,6 +83,7 @@ class GoogleAuthProxy(BaseHTTPRequestHandler):
 
     def _handle_google_auth_init(self):
         session_id = self._generate_session_id()
+        verifier, challenge = generate_pkce()
 
         auth_url = (
             "https://accounts.google.com/o/oauth2/v2/auth?"
@@ -80,13 +92,16 @@ class GoogleAuthProxy(BaseHTTPRequestHandler):
             "response_type=code&"
             "scope=openid%20email%20profile&"
             "access_type=offline&"
-            f"state={session_id}"
+            f"state={session_id}&"
+            f"code_challenge={challenge}&"
+            "code_challenge_method=S256"
         )
 
         active_sessions[session_id] = {
             "status": "pending",
             "created_at": time.time(),
             "token": None,
+            "pkce_verifier": verifier,
         }
 
         html = f"""
@@ -111,7 +126,8 @@ class GoogleAuthProxy(BaseHTTPRequestHandler):
             self._send_html(self._get_error_page("Missing code or state"))
             return
 
-        token_data = self._exchange_code_for_token(code)
+        pkce_verifier = active_sessions.get(state, {}).get("pkce_verifier")
+        token_data = self._exchange_code_for_token(code, pkce_verifier)
         if not token_data:
             self._send_html(self._get_error_page("Token exchange failed"))
             return
@@ -207,7 +223,7 @@ class GoogleAuthProxy(BaseHTTPRequestHandler):
     def _handle_home(self):
         self._send_html("<html><body><h1>BGMI Virtual Login Proxy</h1><a href='/auth/google'>Start Google Login</a></body></html>")
 
-    def _exchange_code_for_token(self, code):
+    def _exchange_code_for_token(self, code, code_verifier=None):
         try:
             data = urllib.parse.urlencode(
                 {
@@ -216,6 +232,7 @@ class GoogleAuthProxy(BaseHTTPRequestHandler):
                     "client_secret": CLIENT_SECRET,
                     "redirect_uri": REDIRECT_URI,
                     "grant_type": "authorization_code",
+                    "code_verifier": code_verifier or "",
                 }
             ).encode()
             req = urllib.request.Request(
