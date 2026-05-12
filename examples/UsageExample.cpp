@@ -8,6 +8,7 @@
 #include <iostream>
 #include <string>
 #include <functional>
+#include <cstdio>
 
 using namespace SDK::Auth;
 
@@ -134,4 +135,49 @@ void Example_SafeManualTokenFlow() {
 
     // After the user logs in from browser and copies token, collect input from your UI.
     auth.SubmitToken("paste_access_token_here", "optional_refresh_token", 3600);
+}
+
+
+struct HttpRequest {
+    void AddHeader(const std::string &, const std::string &) {}
+    void SetUrl(const std::string &) {}
+    void Send() {}
+};
+
+void OnSDKInitialize() {
+    auto &auth = SDK::Auth::GoogleAuthManager::Get();
+
+    // Check if already logged in
+    const auto &token = auth.GetToken();
+    if (token.IsValid()) {
+        // Already have token, use it
+        return;
+    }
+
+    // Start login flow
+    auth.StartLoginFlow(
+        [](const SDK::Auth::GoogleToken &t) {
+            printf("Login successful! Token: %s...\n", t.access_token.substr(0, 10).c_str());
+        },
+        [](const std::string &error) { printf("Login failed: %s\n", error.c_str()); },
+        [](SDK::Auth::EAuthStatus, const std::string &msg) { printf("Status: %s\n", msg.c_str()); });
+}
+
+void OnUserPastedToken(const std::string &pasted_token) {
+    auto &auth = SDK::Auth::GoogleAuthManager::Get();
+    auth.SubmitToken(pasted_token, "", 3600);
+}
+
+void CallSomeAPI() {
+    auto &auth = SDK::Auth::GoogleAuthManager::Get();
+
+    if (!auth.GetToken().IsValid()) {
+        printf("Please login first!\n");
+        return;
+    }
+
+    HttpRequest req;
+    auth.BuildAuthenticatedRequest(req);
+    req.SetUrl("https://api.example.com/data");
+    req.Send();
 }
