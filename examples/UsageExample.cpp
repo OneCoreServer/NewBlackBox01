@@ -3,6 +3,7 @@
 // ============================================================================
 
 #include "SDK/Auth/GoogleLoginProxy.hpp"
+#include "SDK/Auth/GoogleAuthManager.hpp"
 #include "SDK/Core/Memory.hpp"
 #include <iostream>
 #include <string>
@@ -103,7 +104,6 @@ static std::string GetVirtualDeviceId() {
 static void InjectTokenVirtual(const GoogleAuthToken &) {}
 static void HandleVirtualLoginError(const std::string &) {}
 static void DirectGoogleLogin() {}
-static void InjectToBGMI(const std::string &) {}
 
 void Example_VirtualModeLogin() {
     bool is_virtual = SDK::Memory::IsVirtualMode();
@@ -119,16 +119,19 @@ void Example_VirtualModeLogin() {
     }
 }
 
+void Example_SafeManualTokenFlow() {
+    auto &auth = SDK::Auth::GoogleAuthManager::Get();
 
-void Example_BGMIInjectFlow() {
-    SDK::Auth::GoogleLoginProxy::Get().Login(
-        "device_id",
-        [](const auto &token) {
-            // Token mil gaya!
-            InjectToBGMI(token.access_token);
+    auth.StartLoginFlow(
+        [](const SDK::Auth::GoogleToken &token) {
+            std::cout << "Token stored safely. Ready for API use.\n";
+            std::cout << "Access Token Prefix: " << token.access_token.substr(0, 12) << "...\n";
         },
-        [](const auto &error) {
-            // Error handle karo
-            (void)error;
+        [](const std::string &error) { std::cout << "Auth error: " << error << "\n"; },
+        [](SDK::Auth::EAuthStatus, const std::string &message) {
+            std::cout << "Status: " << message << "\n";
         });
+
+    // After the user logs in from browser and copies token, collect input from your UI.
+    auth.SubmitToken("paste_access_token_here", "optional_refresh_token", 3600);
 }

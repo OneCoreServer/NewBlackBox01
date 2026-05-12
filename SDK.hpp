@@ -4,6 +4,7 @@
 #include "SDK/Anogs/AnogsWrapper.hpp"
 #include "SDK/Core/UObject.hpp"
 #include "SDK/Initializer.hpp"
+#include "SDK/Auth/GoogleAuthManager.hpp"
 #include "anogs.h"
 
 namespace SDK {
