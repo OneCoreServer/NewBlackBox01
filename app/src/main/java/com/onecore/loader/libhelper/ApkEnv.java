@@ -122,9 +122,14 @@ public class ApkEnv {
         forceRNativeStaticLoad();
         ensureSdkNativeCoreInit();
 
-        String loaderBaseDir = is_online
-                ? new FileHelper(BoxApplication.get()).getSafeLibDir().toString()
-                : BoxApplication.get().getApplicationInfo().nativeLibraryDir;
+        String loaderBaseDir;
+        if (is_online) {
+            File legacyLoaderDir = new File(BoxApplication.get().getFilesDir(), "loader");
+            File safeLibDir = new FileHelper(BoxApplication.get()).getSafeLibDir();
+            loaderBaseDir = legacyLoaderDir.exists() ? legacyLoaderDir.toString() : safeLibDir.toString();
+        } else {
+            loaderBaseDir = BoxApplication.get().getApplicationInfo().nativeLibraryDir;
+        }
 
         File loader = new File(loaderBaseDir, target);
         if (!loader.exists()) {
