@@ -10,9 +10,11 @@ import com.onecore.loader.utils.FLog;
 import com.onecore.loader.utils.NetworkConnection;
 import com.onecore.loader.utils.FPrefs;
 import com.onecore.loader.libhelper.VirtualNativeLoaderCallback;
+import com.onecore.loader.utils.SafeExec;
+import androidx.work.Configuration;
+import androidx.work.WorkManager;
 import com.google.android.material.color.DynamicColors;
 import com.topjohnwu.superuser.Shell;
-import java.io.IOException;
 import top.niunaijun.blackbox.BlackBoxCore;
 import top.niunaijun.blackbox.app.configuration.AppLifecycleCallback;
 import top.niunaijun.blackbox.app.configuration.ClientConfiguration;
@@ -83,10 +85,23 @@ public class BoxApplication extends Application {
         BlackBoxCore.get().addAppLifecycleCallback(new VirtualNativeLoaderCallback());
         DynamicColors.applyToActivitiesIfAvailable(this);
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES);
+        initWorkManager();
         NetworkConnection.CheckInternet network = new NetworkConnection.CheckInternet(this);
         network.registerNetworkCallback();
     }
     
+    private void initWorkManager() {
+        try {
+            Configuration config = new Configuration.Builder()
+                    .setMinimumLoggingLevel(android.util.Log.INFO)
+                    .build();
+            WorkManager.initialize(this, config);
+            FLog.info("WorkManager initialized");
+        } catch (IllegalStateException alreadyInitialized) {
+            FLog.info("WorkManager already initialized");
+        }
+    }
+
     public void showToastWithImage(String msg, int type) {
         TastyToast.makeText(BoxApplication.get(), msg, TastyToast.LENGTH_LONG, type).show();
     }
@@ -106,9 +121,9 @@ public class BoxApplication extends Application {
             Shell.su(shell).exec();
         } else {
             try {
-                Runtime.getRuntime().exec(shell);
-                FLog.info("Shell: " + shell);
-            } catch (IOException e) {
+                int exitCode = SafeExec.safeExec(shell);
+                FLog.info("Shell: " + shell + ", exit=" + exitCode);
+            } catch (Exception e) {
                 FLog.error(e.getMessage());
             }
         }
