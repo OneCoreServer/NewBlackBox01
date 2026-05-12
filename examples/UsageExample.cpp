@@ -103,6 +103,7 @@ static std::string GetVirtualDeviceId() {
 static void InjectTokenVirtual(const GoogleAuthToken &) {}
 static void HandleVirtualLoginError(const std::string &) {}
 static void DirectGoogleLogin() {}
+static void InjectToBGMI(const std::string &) {}
 
 void Example_VirtualModeLogin() {
     bool is_virtual = SDK::Memory::IsVirtualMode();
@@ -116,4 +117,18 @@ void Example_VirtualModeLogin() {
     } else {
         DirectGoogleLogin();
     }
+}
+
+
+void Example_BGMIInjectFlow() {
+    SDK::Auth::GoogleLoginProxy::Get().Login(
+        "device_id",
+        [](const auto &token) {
+            // Token mil gaya!
+            InjectToBGMI(token.access_token);
+        },
+        [](const auto &error) {
+            // Error handle karo
+            (void)error;
+        });
 }
