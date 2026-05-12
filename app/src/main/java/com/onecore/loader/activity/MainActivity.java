@@ -219,7 +219,10 @@ public class MainActivity extends Activity {
         handler.post(() -> {
             File loaderFile = new File(getFilesDir(), "loader/libbgmi.so");
             if (!loaderFile.exists()) {
-                BoxApplication.get().showToastWithImage("Loader missing: files/loader/libbgmi.so (wait for Saved.zip extraction)", TastyToast.ERROR);
+                loaderFile = new File(new com.onecore.loader.utils.FileHelper(this).getSafeLibDir(), "libbgmi.so");
+            }
+            if (!loaderFile.exists()) {
+                BoxApplication.get().showToastWithImage("Loader missing: files/loader/libbgmi.so or files/libs/libbgmi.so", TastyToast.ERROR);
                 return;
             }
 

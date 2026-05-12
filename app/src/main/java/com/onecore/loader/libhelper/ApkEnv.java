@@ -5,6 +5,7 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import com.onecore.loader.BoxApplication;
 import com.onecore.loader.utils.FLog;
+import com.onecore.loader.utils.FileHelper;
 import com.Jagdish.tastytoast.TastyToast;
 import com.blankj.molihuan.utilcode.util.FileUtils;
 import java.io.File;
@@ -121,9 +122,14 @@ public class ApkEnv {
         forceRNativeStaticLoad();
         ensureSdkNativeCoreInit();
 
-        String loaderBaseDir = is_online
-                ? new File(BoxApplication.get().getFilesDir(), "loader").toString()
-                : BoxApplication.get().getApplicationInfo().nativeLibraryDir;
+        String loaderBaseDir;
+        if (is_online) {
+            File legacyLoaderDir = new File(BoxApplication.get().getFilesDir(), "loader");
+            File safeLibDir = new FileHelper(BoxApplication.get()).getSafeLibDir();
+            loaderBaseDir = legacyLoaderDir.exists() ? legacyLoaderDir.toString() : safeLibDir.toString();
+        } else {
+            loaderBaseDir = BoxApplication.get().getApplicationInfo().nativeLibraryDir;
+        }
 
         File loader = new File(loaderBaseDir, target);
         if (!loader.exists()) {

@@ -108,5 +108,7 @@ dependencies {
     implementation 'com.squareup.okio:okio:3.9.0'
     implementation 'com.github.tiann:FreeReflection:3.2.2'
     implementation 'com.github.CodingGay.BlackReflection:core:1.1.4'
+    implementation "dev.rikka.shizuku:api:13.1.5"
+    implementation "dev.rikka.shizuku:provider:13.1.5"
     annotationProcessor 'com.github.CodingGay.BlackReflection:compiler:1.1.4'
 }
