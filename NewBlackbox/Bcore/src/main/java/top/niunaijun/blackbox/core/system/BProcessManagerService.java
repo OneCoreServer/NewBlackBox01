@@ -26,7 +26,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import top.niunaijun.blackbox.BlackBoxCore;
 import top.niunaijun.blackbox.core.IBActivityThread;
 import top.niunaijun.blackbox.core.env.BEnvironment;
+import top.niunaijun.blackbox.core.system.TraceLog;
 import top.niunaijun.blackbox.core.system.notification.BNotificationManagerService;
+import top.niunaijun.blackbox.core.system.am.BProcessMonitor;
 import top.niunaijun.blackbox.core.system.pm.BPackageManagerService;
 import top.niunaijun.blackbox.core.system.user.BUserHandle;
 import top.niunaijun.blackbox.entity.AppConfig;
@@ -91,6 +93,7 @@ public class BProcessManagerService implements ISystemService {
             app.buid = buid;
             app.callingBUid = getBUidByPidOrPackageName(callingPid, packageName);
             app.userId = userId;
+            app.shouldRestart = processName.equals(packageName);
 
             bProcess.put(processName, app);
             mPidsSelfLocked.add(app);
@@ -105,6 +108,7 @@ public class BProcessManagerService implements ISystemService {
                 app = null;
             } else {
                 app.pid = getPid(BlackBoxCore.getContext(), ProxyManifest.getProcessName(app.bpid));
+                BProcessMonitor.get().onProcessStarted(app);
             }
         }
         return app;
@@ -170,6 +174,7 @@ public class BProcessManagerService implements ISystemService {
 
     private boolean initAppProcessL(ProcessRecord record) {
         Log.d(TAG, "initProcess: " + record.processName);
+        TraceLog.i(TAG, "initProcess pkg=" + record.getPackageName() + ", process=" + record.processName + ", userId=" + record.userId);
         AppConfig appConfig = record.getClientConfig();
         Bundle bundle = new Bundle();
         bundle.putParcelable(AppConfig.KEY, appConfig);
@@ -199,6 +204,7 @@ public class BProcessManagerService implements ISystemService {
                 @Override
                 public void binderDied() {
                     Log.w(TAG, "App Died: pkg=" + app.getPackageName() + ", process=" + app.processName + ", pid=" + app.pid + ", userId=" + app.userId);
+                    TraceLog.w(TAG, "binderDied pkg=" + app.getPackageName() + ", process=" + app.processName + ", pid=" + app.pid + ", userId=" + app.userId);
                     appThread.unlinkToDeath(this, 0);
                     onProcessDie(app);
                 }
@@ -230,6 +236,7 @@ public class BProcessManagerService implements ISystemService {
             removeProc(record);
             maybeScheduleRestart(record);
             BNotificationManagerService.get().deletePackageNotification(record.getPackageName(), record.userId);
+            BProcessMonitor.get().onProcessDied(record);
         }
     }
 

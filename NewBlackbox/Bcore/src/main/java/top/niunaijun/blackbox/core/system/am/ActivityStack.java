@@ -32,6 +32,7 @@ import black.com.android.internal.BRRstyleable;
 import top.niunaijun.blackbox.BlackBoxCore;
 import top.niunaijun.blackbox.core.system.BProcessManagerService;
 import top.niunaijun.blackbox.core.system.ProcessRecord;
+import top.niunaijun.blackbox.core.system.TraceLog;
 import top.niunaijun.blackbox.core.system.pm.BPackageManagerService;
 import top.niunaijun.blackbox.core.system.pm.PackageManagerCompat;
 import top.niunaijun.blackbox.proxy.ProxyActivity;
@@ -493,6 +494,11 @@ public class ActivityStack {
             activityRecord.finished = true;
             Log.d(TAG, "onActivityDestroyed : " + activityRecord.component.toString());
             activityRecord.task.removeActivity(activityRecord);
+            TraceLog.i(TAG, "activityDestroyed pkg=" + activityRecord.info.packageName + ", taskId=" + activityRecord.task.id + ", userId=" + userId + ", remaining=" + activityRecord.task.activities.size());
+            if (activityRecord.task.activities.isEmpty()) {
+                TraceLog.w(TAG, "taskEmpty forceStop pkg=" + activityRecord.info.packageName + ", userId=" + userId + ", taskId=" + activityRecord.task.id);
+                BProcessManagerService.get().killPackageAsUser(activityRecord.info.packageName, userId);
+            }
         }
     }
 
@@ -505,6 +511,25 @@ public class ActivityStack {
             }
             activityRecord.finished = true;
             Log.d(TAG, "onFinishActivity : " + activityRecord.component.toString());
+        }
+    }
+
+    public void finishAllActivities(String packageName, int userId) {
+        synchronized (mTasks) {
+            for (TaskRecord task : mTasks.values()) {
+                if (task.userId != userId) {
+                    continue;
+                }
+                List<ActivityRecord> snapshot = new LinkedList<>(task.activities);
+                for (ActivityRecord activity : snapshot) {
+                    if (!packageName.equals(activity.info.packageName)) {
+                        continue;
+                    }
+                    activity.finished = true;
+                    task.removeActivity(activity);
+                }
+            }
+            TraceLog.w(TAG, "finishAllActivities pkg=" + packageName + ", userId=" + userId);
         }
     }
 
@@ -540,6 +565,7 @@ public class ActivityStack {
     private void synchronizeTasks() {
         List<ActivityManager.RecentTaskInfo> recentTasks = mAms.getRecentTasks(100, 0);
         if (recentTasks == null || recentTasks.isEmpty()) {
+            TraceLog.w(TAG, "synchronizeTasks skipped: recentTasks empty");
             return;
         }
         Map<Integer, TaskRecord> reorderedTasks = new LinkedHashMap<>();

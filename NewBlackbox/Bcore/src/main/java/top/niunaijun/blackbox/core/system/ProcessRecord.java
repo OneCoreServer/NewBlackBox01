@@ -23,6 +23,7 @@ public class ProcessRecord extends Binder {
     public int bpid;
     public int callingBUid;
     public int userId;
+    public boolean shouldRestart;
 
     public ConditionVariable initLock = new ConditionVariable();
 
