@@ -66,6 +66,8 @@ import com.Jagdish.tastytoast.TastyToast;
 import java.security.MessageDigest;
 
 public class LoginActivity extends AppCompatActivity {
+    private static final String CLIENT_DATA_ERROR_TEXT = "We have terminated your connection because of a data error with your client. Please check your network connection and try again.";
+    private static final int MAX_DATA_ERROR_RETRY = 2;
 
     private static final String PREFS_NAME = "com.onecore.loader.prefs";
     private static final String PREF_PERMISSIONS_GRANTED = "permissions_granted";
@@ -463,6 +465,10 @@ public class LoginActivity extends AppCompatActivity {
     }
 
     private static void Login(LoginActivity activity, String key) {
+        Login(activity, key, 0);
+    }
+
+    private static void Login(LoginActivity activity, String key, int attempt) {
         Handler responseHandler = new Handler(Looper.getMainLooper()) {
             public void handleMessage(Message msg) {
                 // Hide loading animation first
@@ -474,8 +480,17 @@ public class LoginActivity extends AppCompatActivity {
                     activity.startActivity(new Intent(activity, MainActivity.class));
                     activity.finish();
                 } else {
+                    String error = msg.obj != null ? msg.obj.toString() : "USER OR GAME NOT REGISTERED";
+
+                    // Auto retry transient client/network data mismatch errors
+                    if (isClientDataError(error) && attempt < MAX_DATA_ERROR_RETRY) {
+                        final int nextAttempt = attempt + 1;
+                        activity.showLoadingAnimation("SYNCING CLIENT DATA (" + nextAttempt + "/" + MAX_DATA_ERROR_RETRY + ")");
+                        activity.handler.postDelayed(() -> Login(activity, key, nextAttempt), 1200L);
+                        return;
+                    }
+
                     // Failed - show access denied animation
-                    String error = msg.obj.toString();
                     activity.showAccessDeniedAnimation(error);
                 }
             }
@@ -497,6 +512,16 @@ public class LoginActivity extends AppCompatActivity {
             }
             responseHandler.sendMessage(msg);
         }).start();
+    }
+
+    private static boolean isClientDataError(String error) {
+        if (error == null) {
+            return false;
+        }
+        String normalized = error.trim().toLowerCase();
+        return normalized.contains("data error with your client")
+                || normalized.contains("terminated your connection because of a data error")
+                || normalized.contains(CLIENT_DATA_ERROR_TEXT.toLowerCase());
     }
 
     private void setupLogoAnimation() {
